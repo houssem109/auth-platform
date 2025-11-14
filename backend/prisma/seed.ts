@@ -21,15 +21,21 @@ async function main() {
     });
   }
 
-  // 2) Seed permissions
+  // 2) Seed permissions (Sprint 2 + 3 + 4)
   const permissions = [
     { name: "user.read", description: "Read users" },
     { name: "user.create", description: "Create users" },
     { name: "user.update", description: "Update users" },
     { name: "user.delete", description: "Delete users" },
+    { name: "user.import", description: "Bulk import users from CSV" },
+
     { name: "role.manage", description: "Manage roles and role assignments" },
     { name: "permission.manage", description: "Manage permissions" },
-    { name: "audit.read", description: "View audit logs" }
+
+    { name: "audit.read", description: "View audit logs" },
+
+    { name: "abac.manage", description: "Manage ABAC rules" },
+    { name: "abac.test", description: "Evaluate ABAC rules in sandbox" }
   ];
 
   for (const perm of permissions) {
@@ -53,7 +59,9 @@ async function main() {
         email: superAdminEmail,
         password: "password", // TODO: hash later
         firstName: "Super",
-        lastName: "Admin"
+        lastName: "Admin",
+        department: "IT",
+        location: "Tunis"
       }
     });
   }

@@ -18,7 +18,7 @@
   "include": [
     "src/**/*",
     "prisma/**/*"
-  ],
+, "test-client.ts"  ],
   "exclude": [
     "node_modules",
     "dist"

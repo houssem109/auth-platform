@@ -14,6 +14,8 @@ model User {
   firstName String?
   lastName  String?
   isActive  Boolean    @default(true)
+  department String?   // Sprint 4: ABAC attribute
+  location   String?   // Sprint 4: ABAC attribute
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
 
@@ -67,4 +69,32 @@ model AuditLog {
   createdAt DateTime @default(now())
 
   user      User?    @relation(fields: [userId], references: [id])
+}
+
+model AbacRule {
+  id             String   @id @default(cuid())
+  name           String
+  description    String?
+  permissionName String   // permission this rule applies to (ex: "user.read")
+  attribute      String   // "department" | "location" | "time"
+  operator       String   // "equals" | "in" | "between"
+  value          String   // JSON-encoded value (ex: "\"HR\"" or "[\"Tunis\"]" or "{\"start\":\"08:00\",\"end\":\"18:00\"}")
+  effect         String   // "allow" or "deny"
+  createdAt      DateTime @default(now())
+}
+
+model MetricEvent {
+  id        String   @id @default(cuid())
+  type      String
+  metadata  String?
+  createdAt DateTime @default(now())
+}
+
+model AutomationRule {
+  id        String   @id @default(cuid())
+  name      String
+  event     String
+  targetUrl String
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
 }

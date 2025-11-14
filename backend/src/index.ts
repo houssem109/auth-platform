@@ -1,4 +1,5 @@
 import app from "./server";
+import "./cron/dailyReport";
 
 const PORT = process.env.PORT || 4000;
 
