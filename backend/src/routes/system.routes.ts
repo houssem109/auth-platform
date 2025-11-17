@@ -1,0 +1,76 @@
+import { Router } from "express";
+import { PrismaClient } from "@prisma/client";
+import { withRetry } from "../services/system.service";
+
+const prisma = new PrismaClient();
+const router = Router();
+
+/**
+ * Basic health check
+ * GET /api/system/health
+ */
+router.get("/health", async (_req, res, next) => {
+  try {
+    const start = Date.now();
+
+    await withRetry(() => prisma.$queryRaw`SELECT 1`);
+
+    const latency = Date.now() - start;
+
+    res.json({
+      status: "ok",
+      db: "connected",
+      dbLatencyMs: latency,
+      uptimeSeconds: Math.round(process.uptime()),
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * Lightweight monitoring snapshot
+ * GET /api/system/status
+ */
+router.get("/status", async (_req, res, next) => {
+  try {
+    const [users, roles, perms, errors, metrics] = await Promise.all([
+      prisma.user.count(),
+      prisma.role.count(),
+      prisma.permission.count(),
+      prisma.systemError.count({
+        where: {
+          createdAt: {
+            gte: new Date(Date.now() - 24 * 60 * 60 * 1000),
+          },
+        },
+      }),
+      prisma.metricEvent.count({
+        where: {
+          createdAt: {
+            gte: new Date(Date.now() - 24 * 60 * 60 * 1000),
+          },
+        },
+      }),
+    ]);
+
+    res.json({
+      status: "ok",
+      totals: {
+        users,
+        roles,
+        permissions: perms,
+      },
+      last24h: {
+        systemErrors: errors,
+        metricEvents: metrics,
+      },
+      uptimeSeconds: Math.round(process.uptime()),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+export default router;

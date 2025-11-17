@@ -28,8 +28,20 @@ router.get("/", requirePermission("role.manage"), async (req, res, next) => {
 });
 
 // CREATE ROLE
+// CREATE ROLE (safe)
 router.post("/", requirePermission("role.manage"), async (req, res, next) => {
   try {
+    // Check if role already exists
+    const existing = await prisma.role.findUnique({
+      where: { name: req.body.name }
+    });
+
+    if (existing) {
+      return res.status(400).json({
+        error: "Role already exists"
+      });
+    }
+
     const role = await prisma.role.create({ data: req.body });
 
     await logAction({
@@ -40,6 +52,7 @@ router.post("/", requirePermission("role.manage"), async (req, res, next) => {
     });
 
     res.status(201).json(role);
+
   } catch (error) {
     next(error);
   }

@@ -98,3 +98,13 @@ model AutomationRule {
   enabled   Boolean  @default(true)
   createdAt DateTime @default(now())
 }
+model SystemError {
+  id        String   @id @default(cuid())
+  message   String
+  code      String?
+  stack     String?
+  path      String?
+  method    String?
+  userEmail String?
+  createdAt DateTime @default(now())
+}

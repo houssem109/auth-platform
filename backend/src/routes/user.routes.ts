@@ -29,18 +29,31 @@ function parseCsv(csv: string) {
 // -------------------------
 // GET USERS
 // -------------------------
-router.get("/", requirePermission("user.read"), async (req, res, next) => {
+router.post("/", requirePermission("user.create"), async (req, res, next) => {
   try {
-    const users = await prisma.user.findMany();
+    const { email, password, firstName, lastName, department, location } = req.body;
+
+    // Check if email exists
+    const exists = await prisma.user.findUnique({ where: { email } });
+    if (exists) {
+      return res.status(400).json({ error: "Email already exists" });
+    }
+
+    const user = await prisma.user.create({
+      data: { email, password, firstName, lastName, department, location }
+    });
 
     await logAction({
       userId: req.user?.id,
-      action: "user.read",
+      action: "user.create",
       resource: "User",
-      payload: { count: users.length }
+      payload: user
     });
 
-    res.json(users);
+    await logMetric("user_created", { id: user.id, email: user.email });
+    await triggerAutomationEvent("user.created", { id: user.id, email: user.email });
+
+    res.status(201).json(user);
   } catch (error) {
     next(error);
   }

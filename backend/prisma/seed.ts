@@ -3,6 +3,8 @@ import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 
 async function main() {
+  console.log("🌱 Seeding roles, permissions, super_admin...");
+
   // 1) Seed roles
   const roles = [
     { name: "super_admin", isSystem: true, description: "Full access to everything" },
@@ -46,7 +48,7 @@ async function main() {
     });
   }
 
-  // 3) Make sure a super admin user exists
+  // 3) Ensure super admin user exists
   const superAdminEmail = "superadmin@example.com";
 
   let superAdmin = await prisma.user.findUnique({
@@ -57,16 +59,27 @@ async function main() {
     superAdmin = await prisma.user.create({
       data: {
         email: superAdminEmail,
-        password: "password", // TODO: hash later
+        password: "password", // temporary plaintext
         firstName: "Super",
         lastName: "Admin",
-        department: "IT",
+
+        // IMPORTANT: ABAC FIX
+        department: "HR",
+        location: "Tunis"
+      }
+    });
+  } else {
+    // If exists, ensure department stays HR so ABAC never blocks it
+    await prisma.user.update({
+      where: { email: superAdminEmail },
+      data: {
+        department: "HR",
         location: "Tunis"
       }
     });
   }
 
-  // 4) Attach super_admin role to that user
+  // 4) Attach super_admin role to user
   const superAdminRole = await prisma.role.findUnique({
     where: { name: "super_admin" }
   });
@@ -93,7 +106,7 @@ async function main() {
     });
   }
 
-  // 5) Give super_admin ALL permissions
+  // 5) Assign ALL permissions to super_admin
   const allPerms = await prisma.permission.findMany();
 
   for (const perm of allPerms) {
@@ -116,7 +129,7 @@ async function main() {
     }
   }
 
-  console.log("✅ Seed completed: roles, permissions, super_admin user");
+  console.log("✅ Seed completed successfully");
 }
 
 main()
