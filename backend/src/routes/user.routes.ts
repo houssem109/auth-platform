@@ -29,6 +29,20 @@ function parseCsv(csv: string) {
 // -------------------------
 // GET USERS
 // -------------------------
+router.get("/", requirePermission("user.read"), async (req, res, next) => {
+  try {
+    const users = await prisma.user.findMany({
+      include: { userRoles: true }
+    });
+
+    res.json(users);
+  } catch (error) {
+    next(error);
+  }
+});
+// -------------------------
+// CREATE USER
+// -------------------------
 router.post("/", requirePermission("user.create"), async (req, res, next) => {
   try {
     const { email, password, firstName, lastName, department, location } = req.body;
@@ -59,33 +73,6 @@ router.post("/", requirePermission("user.create"), async (req, res, next) => {
   }
 });
 
-// -------------------------
-// CREATE USER
-// -------------------------
-router.post("/", requirePermission("user.create"), async (req, res, next) => {
-  try {
-    const { email, password, firstName, lastName, department, location } = req.body;
-
-    const user = await prisma.user.create({
-      data: { email, password, firstName, lastName, department, location }
-    });
-
-    await logAction({
-      userId: req.user?.id,
-      action: "user.create",
-      resource: "User",
-      payload: user
-    });
-
-    // Sprint 5: metrics + automation
-    await logMetric("user_created", { id: user.id, email: user.email });
-    await triggerAutomationEvent("user.created", { id: user.id, email: user.email });
-
-    res.status(201).json(user);
-  } catch (error) {
-    next(error);
-  }
-});
 
 // -------------------------
 // UPDATE USER
