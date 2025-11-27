@@ -74,29 +74,21 @@ router.delete(
   }
 );
 
-
-// SANDBOX (Used only for testing ABAC rules)
+// SANDBOX / EVALUATE
 router.post(
-  "/sandbox",
+  "/evaluate",
   async (req, res, next) => {
     try {
-      const user = req.user;
+      const { user, resource, rules } = req.body;
 
-      // Load all rules for "user.read" (tests use this permission)
-      const rules = await prisma.abacRule.findMany({
-        where: { permissionName: "user.read" },
-        orderBy: { createdAt: "desc" }
-      });
+      // MUST await the async function
+      const result = await evaluateAbacRules(user, resource, rules);
 
-      const result = await evaluateAbacRules(user, {}, rules);
-
-      return res.json(result);
-
+      return res.status(200).json(result);
     } catch (error) {
       next(error);
     }
   }
 );
-
 
 export default router;
