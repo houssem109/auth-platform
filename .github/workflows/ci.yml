@@ -53,6 +53,11 @@ jobs:
         run: |
           cd backend
           npx prisma migrate deploy
+          
+      - name: Seed Database
+        run: |
+          cd backend
+          npx ts-node prisma/seed.ts
 
       - name: Run Backend Tests
         run: |
