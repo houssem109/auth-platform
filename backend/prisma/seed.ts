@@ -23,7 +23,7 @@ async function main() {
     });
   }
 
-  // 2) Seed permissions (Sprint 2 + 3 + 4)
+  // 2) Seed permissions 
   const permissions = [
     { name: "user.read", description: "Read users" },
     { name: "user.create", description: "Create users" },
