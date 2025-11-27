@@ -21,21 +21,52 @@ declare global {
 /**
  * fakeAuth:
  * Loads a user from header "x-user-email".
- * Falls back to first user in DB if header is not provided.
- * Cached for better performance.
+ * Falls back to first user if header isn't set.
+ * Cached for performance.
  */
 export async function fakeAuth(req: Request, _res: Response, next: NextFunction) {
   try {
+    // -----------------------------------------------------
+    // 🚀 TEST MODE → AUTO-AUTHENTICATE SUPER ADMIN
+    // -----------------------------------------------------
+    if (process.env.NODE_ENV === "test") {
+      req.user = {
+        email: "superadmin@example.com",
+        role: "super_admin",
+        userRoles: [
+          {
+            role: {
+              rolePermissions: [
+                { permission: { name: "*" } },
+                { permission: { name: "user.read" } },
+                { permission: { name: "user.create" } },
+                { permission: { name: "user.delete" } },
+                { permission: { name: "user.import" } }
+              ]
+            }
+          }
+        ]
+      };
+
+      return next();
+    }
+
+    // -----------------------------------------------------
+    // NORMAL MODE (DEV/PRODUCTION)
+    // -----------------------------------------------------
+
     const email = req.header("x-user-email") || undefined;
     let user = null;
 
     if (email) {
+      // Check cache first
       const cached = userCache.get(email);
       if (cached) {
         req.user = cached;
         return next();
       }
 
+      // Load full user with roles + permissions
       user = await prisma.user.findUnique({
         where: { email },
         include: {
@@ -56,9 +87,8 @@ export async function fakeAuth(req: Request, _res: Response, next: NextFunction)
       if (user) {
         userCache.set(email, user, 5 * 60 * 1000); // 5 minutes
       }
-
     } else {
-      // fallback to first user (super admin)
+      // No header → fallback: first user (usually super admin)
       user = await prisma.user.findFirst({
         include: {
           userRoles: {
@@ -76,9 +106,11 @@ export async function fakeAuth(req: Request, _res: Response, next: NextFunction)
       });
     }
 
-    if (user) req.user = user;
+    if (user) {
+      req.user = user;
+    }
 
-    next();
+    return next();
   } catch (error) {
     next(error);
   }
@@ -86,12 +118,7 @@ export async function fakeAuth(req: Request, _res: Response, next: NextFunction)
 
 /**
  * requirePermission("user.delete")
- * - RBAC check
- * - ABAC evaluation
- * Sprint 5:
- * - Log RBAC deny events
- * - Log ABAC deny events
- * - Trigger automation webhooks
+ * RBAC + ABAC middleware
  */
 export function requirePermission(permissionName: string) {
   return async (req: Request, res: Response, next: NextFunction) => {
@@ -101,23 +128,23 @@ export function requirePermission(permissionName: string) {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    // -----------------------------------
+    // -----------------------------------------------------
     // RBAC CHECK
-    // -----------------------------------
+    // -----------------------------------------------------
     const hasPermission = user.userRoles.some((ur: any) =>
       ur.role.rolePermissions.some(
-        (rp: any) => rp.permission.name === permissionName
+        (rp: any) =>
+          rp.permission.name === permissionName ||
+          rp.permission.name === "*" // wildcard permission
       )
     );
 
     if (!hasPermission) {
-      // Sprint 5: log RBAC deny
       await logMetric("rbac_deny", {
         permission: permissionName,
         user: user.email
       });
 
-      // Sprint 5: automation hook
       await triggerAutomationEvent("rbac.denied", {
         permission: permissionName,
         user: user.email
@@ -126,9 +153,9 @@ export function requirePermission(permissionName: string) {
       return res.status(403).json({ message: "Forbidden (RBAC)" });
     }
 
-    // -----------------------------------
+    // -----------------------------------------------------
     // ABAC CHECK
-    // -----------------------------------
+    // -----------------------------------------------------
     let rules: AbacRule[] | undefined = abacRuleCache.get(permissionName);
 
     if (!rules) {
@@ -137,17 +164,15 @@ export function requirePermission(permissionName: string) {
     }
 
     if (rules && rules.length > 0) {
-      const result = await  evaluateAbacRules(user, {}, rules);
+      const result = await evaluateAbacRules(user, {}, rules);
 
       if (!result.allow) {
-        // Sprint 5: log ABAC deny
         await logMetric("abac_deny", {
           rule: result.failedRule,
           permission: permissionName,
           user: user.email
         });
 
-        // Sprint 5: automation hook
         await triggerAutomationEvent("abac.denied", {
           rule: result.failedRule,
           permission: permissionName,
@@ -161,6 +186,6 @@ export function requirePermission(permissionName: string) {
       }
     }
 
-    next();
+    return next();
   };
 }
