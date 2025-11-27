@@ -14,6 +14,7 @@ import systemErrorsRouter from "./routes/systemErrors.routes";
 
 import { rateLimit } from "./middleware/rateLimit";
 import { logSystemError } from "./services/system.service";
+import { performanceMonitor } from "./middleware/performance";
 
 const app = express();
 
@@ -44,7 +45,7 @@ app.use("/api/reports", reportsRouter);
 app.use("/api/automation", automationRouter);
 app.use("/api/system", systemRouter);
 app.use("/api/system-errors", systemErrorsRouter);
-
+app.use(performanceMonitor);
 // Global error handler (structured)
 app.use(
   async (

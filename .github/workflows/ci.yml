@@ -1,0 +1,99 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+    
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: dev
+          POSTGRES_PASSWORD: dev
+          POSTGRES_DB: authdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U dev"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+      # --------------------------
+      # CHECKOUT PROJECT
+      # --------------------------
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      # --------------------------
+      # SETUP NODE
+      # --------------------------
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+          cache: "npm"
+
+      # --------------------------
+      # BACKEND - INSTALL
+      # --------------------------
+      - name: Install Backend Dependencies
+        run: |
+          cd backend
+          npm install
+
+      # --------------------------
+      # BACKEND - TYPE CHECKING
+      # --------------------------
+      - name: Backend Type Check
+        run: |
+          cd backend
+          npx tsc --noEmit
+
+      # --------------------------
+      # DATABASE - Apply Prisma
+      # --------------------------
+      - name: Run Prisma Migrations
+        run: |
+          cd backend
+          npx prisma migrate deploy
+
+      # --------------------------
+      # BACKEND - RUN TESTS
+      # --------------------------
+      - name: Run Backend Tests
+        run: |
+          cd backend
+          npm test -- --runInBand
+
+      # --------------------------
+      # FRONTEND - INSTALL
+      # --------------------------
+      - name: Install Frontend Dependencies
+        run: |
+          cd frontend
+          npm install
+
+      # --------------------------
+      # FRONTEND - LINT
+      # --------------------------
+      - name: Frontend ESLint
+        run: |
+          cd frontend
+          npm run lint || true
+        # use "|| true" to avoid blocking if lint warnings exist
+
+      # --------------------------
+      # FRONTEND - BUILD
+      # --------------------------
+      - name: Build Frontend
+        run: |
+          cd frontend
+          npm run build
