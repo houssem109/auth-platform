@@ -57,7 +57,8 @@ jobs:
       - name: Seed Database
         run: |
           cd backend
-          npx ts-node prisma/seed.ts
+          npx prisma db seed
+
 
       - name: Run Backend Tests
         run: |

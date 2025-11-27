@@ -21,40 +21,64 @@ declare global {
 /**
  * fakeAuth:
  * Loads a user from header "x-user-email".
- * Falls back to first user if header isn't set.
- * Cached for performance.
+ * Also handles test-mode behavior.
  */
 export async function fakeAuth(req: Request, _res: Response, next: NextFunction) {
   try {
     // -----------------------------------------------------
-    // 🚀 TEST MODE → AUTO-AUTHENTICATE SUPER ADMIN
+    // 🚀 TEST MODE (used in CI + Jest)
     // -----------------------------------------------------
     if (process.env.NODE_ENV === "test") {
-      req.user = {
-        email: "superadmin@example.com",
-        role: "super_admin",
-        userRoles: [
-          {
-            role: {
-              rolePermissions: [
-                { permission: { name: "*" } },
-                { permission: { name: "user.read" } },
-                { permission: { name: "user.create" } },
-                { permission: { name: "user.delete" } },
-                { permission: { name: "user.import" } }
-              ]
+
+      // 🟦 1) Let ABAC sandbox endpoint run REAL ABAC LOGIC
+      if (req.path.includes("/abac/sandbox")) {
+        return next();
+      }
+
+      const email = req.header("x-user-email");
+
+      // 🟩 2) SUPERADMIN: load seeded DB superadmin with full permissions
+      if (email === "superadmin@example.com") {
+        req.user = await prisma.user.findUnique({
+          where: { email },
+          include: {
+            userRoles: {
+              include: {
+                role: {
+                  include: {
+                    rolePermissions: { include: { permission: true } }
+                  }
+                }
+              }
             }
           }
-        ]
-      };
+        });
+
+        return next();
+      }
+
+      // 🟥 3) NORMAL USER → NO PERMISSIONS (RBAC deny test)
+      req.user = await prisma.user.findUnique({
+        where: { email: email || "" },
+        include: {
+          userRoles: {
+            include: {
+              role: {
+                include: {
+                  rolePermissions: { include: { permission: true } }
+                }
+              }
+            }
+          }
+        }
+      });
 
       return next();
     }
 
     // -----------------------------------------------------
-    // NORMAL MODE (DEV/PRODUCTION)
+    // NORMAL MODE (DEV / PRODUCTION)
     // -----------------------------------------------------
-
     const email = req.header("x-user-email") || undefined;
     let user = null;
 
@@ -66,7 +90,7 @@ export async function fakeAuth(req: Request, _res: Response, next: NextFunction)
         return next();
       }
 
-      // Load full user with roles + permissions
+      // Load user with roles + permissions
       user = await prisma.user.findUnique({
         where: { email },
         include: {
@@ -87,6 +111,7 @@ export async function fakeAuth(req: Request, _res: Response, next: NextFunction)
       if (user) {
         userCache.set(email, user, 5 * 60 * 1000); // 5 minutes
       }
+
     } else {
       // No header → fallback: first user (usually super admin)
       user = await prisma.user.findFirst({
@@ -106,11 +131,10 @@ export async function fakeAuth(req: Request, _res: Response, next: NextFunction)
       });
     }
 
-    if (user) {
-      req.user = user;
-    }
+    if (user) req.user = user;
 
     return next();
+
   } catch (error) {
     next(error);
   }
@@ -118,7 +142,7 @@ export async function fakeAuth(req: Request, _res: Response, next: NextFunction)
 
 /**
  * requirePermission("user.delete")
- * RBAC + ABAC middleware
+ * Performs RBAC + ABAC evaluation.
  */
 export function requirePermission(permissionName: string) {
   return async (req: Request, res: Response, next: NextFunction) => {
